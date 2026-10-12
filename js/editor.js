@@ -421,7 +421,9 @@
   const shorten = (text, n) => (text.length > n ? text.slice(0, n - 1).trim() + '…' : text);
 
   function cvImportCard() {
-    const picker = h('input', { type: 'file', accept: '.pdf,.docx,.json,.txt,application/pdf', hidden: true });
+    // No "accept" filter on purpose: phone file pickers grey out .docx/.json files when
+    // filtered by extension. The file type is checked after picking instead.
+    const picker = h('input', { type: 'file', hidden: true });
     const button = h('button', { type: 'button', class: 'ed-btn primary', onclick: () => picker.click() }, 'Upload my CV…');
     picker.addEventListener('change', async () => {
       const file = picker.files[0];
@@ -698,7 +700,7 @@
     const fileRows = pending.map((f) => h('li', {}, h('code', {}, f.path), ' ', h('span', { class: 'ed-help' }, kb(f.blob.size)), ' ',
       h('button', { type: 'button', class: 'ed-btn small', onclick: () => PF.publish.downloadBlob(f.blob, f.path.split('/').pop()) }, 'Download')));
 
-    const importer = h('input', { type: 'file', accept: '.js,.json,application/json,text/javascript', hidden: true });
+    const importer = h('input', { type: 'file', hidden: true }); // no filter, see cvImportCard()
     importer.addEventListener('change', async () => {
       const file = importer.files[0];
       importer.value = '';

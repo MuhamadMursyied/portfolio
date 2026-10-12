@@ -439,7 +439,8 @@
     if (name.endsWith('.pdf') || file.type === 'application/pdf') return { kind: 'pdf', result: parseCvText(await pdfToText(file)) };
     if (name.endsWith('.docx')) return { kind: 'docx', result: parseCvText(await docxToText(file)) };
     if (name.endsWith('.doc')) throw new Error('Old .doc files cannot be read. Save it as .docx or PDF first.');
-    return { kind: 'text', result: parseCvText(await file.text()) };
+    if (name.endsWith('.txt') || file.type === 'text/plain') return { kind: 'text', result: parseCvText(await file.text()) };
+    throw new Error('Choose a PDF, a Word .docx file or a CV Builder .json file.');
   }
 
   const api = { parseCvText, fromCvBuilder, toYearMonth, findRange, importCvFile };
