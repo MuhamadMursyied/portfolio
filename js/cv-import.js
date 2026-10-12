@@ -20,6 +20,8 @@
   const RANGE = new RegExp('(' + DATE_RE + ')\\s*(?:–|—|-|to|until|till|hingga)\\s*(' + END_RE + ')', 'i');
   const SINGLE_DATE_AT_END = new RegExp('(?:^|[\\s,(|–—-])(' + DATE_RE + ')\\)?\\s*$', 'i');
   const CURRENT_RE = /^(present|current|now|ongoing|today|sekarang|kini)$/i;
+  // "June - Aug 2020": two months sharing one year.
+  const MONTH_SPAN = new RegExp('\\b(' + MONTH_RE + ')\\.?\\s*(?:–|—|-|to)\\s*(' + MONTH_RE + ')\\.?\\s+(\\d{4})', 'i');
 
   // "Mar 2025" -> "2025-03", "03/2025" -> "2025-03", "2025" -> "2025".
   function toYearMonth(text) {
@@ -34,6 +36,13 @@
 
   // Finds a date range in a line. Returns { start, end, current, rest } or null.
   function findRange(line) {
+    const span = MONTH_SPAN.exec(line);
+    if (span && !RANGE.test(line)) {
+      return {
+        start: toYearMonth(span[1] + ' ' + span[3]), end: toYearMonth(span[2] + ' ' + span[3]), current: false,
+        rest: cleanEdges(line.slice(0, span.index) + ' ' + line.slice(span.index + span[0].length)),
+      };
+    }
     const m = RANGE.exec(line);
     if (!m) return null;
     const current = CURRENT_RE.test(m[2].trim());
@@ -60,8 +69,8 @@
 
   const SECTION_PATTERNS = [
     ['about', /^(professional |career |personal |executive )?(summary|profile|objective|about( me)?|overview)$/],
-    ['experience', /^((relevant|professional|work|working|industry|industrial|internship( and work)?|employment|career) )*(experience|employment|work history|employment history|career history)$/],
-    ['education', /^(education|educational background|academic (background|qualifications?)|qualifications?|education and (training|qualifications))$/],
+    ['experience', /^((relevant|professional|work|working|industry|industrial|internship( and work)?|employment|career) )*(experiences?|employment|work history|employment history|career history)$/],
+    ['education', /^(education|educations|education background|educational background|academic (background|qualifications?)|qualifications?|education and (training|qualifications))$/],
     ['skills', /^((technical|key|core|professional|relevant) )?(skills|competencies|skill set|skills and (tools|technologies|expertise|abilities))$/],
     ['projects', /^((key|selected|personal|academic|relevant|notable|technical) )?projects$/],
     ['certifications', /^(certifications?|certificates|licen[cs]es( and certifications)?|certifications and (licen[cs]es|training|courses)|courses|training|professional development)$/],
@@ -108,7 +117,9 @@
     });
 
     const isContact = (l) => EMAIL.test(l) || PHONE.test(l) || /linkedin|github|https?:|www\./i.test(l);
+    const isLabel = (l) => /^(address|alamat|mobile|phone|tel|telephone|email|e-mail|contact|location|linkedin|github|website|portfolio|nationality|date of birth|ic|gender|age)\s*:?$/i.test(l);
     for (const line of lines) {
+      if (isLabel(line)) continue;
       if (isContact(line)) {
         // "Phone | email | City, State | linkedin" - the part with none of those is the location.
         if (!profile.location && /[|•·]/.test(line)) {
@@ -127,6 +138,10 @@
         profile.location = line;
       }
     }
+    // "MUHAMAD ALI" or "muhamad ali Bin Abu" -> "Muhamad Ali Bin Abu"
+    if (profile.name && (profile.name === profile.name.toUpperCase() || /(^|\s)[a-z]/.test(profile.name))) {
+      profile.name = profile.name.toLowerCase().replace(/(^|[\s'-])(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
+    }
     return profile;
   }
 
@@ -138,8 +153,9 @@
     const entries = [];
     let cur = null;
     let lastBullet = false;
+    let lastYear = ''; // a year on its own line ("2024") applies to the entries under it
     const start = (title, range) => {
-      cur = { title: title || '', start: range ? range.start : '', end: range ? range.end : '', current: !!(range && range.current), hasDate: !!range, sub: [], bullets: [] };
+      cur = { title: title || '', start: range ? range.start : lastYear, end: range ? range.end : '', current: !!(range && range.current), hasDate: !!range, sub: [], bullets: [] };
       entries.push(cur);
       lastBullet = false;
     };
@@ -150,6 +166,12 @@
       if (!line) return;
       const isBullet = BULLET.test(line);
       const range = isBullet ? null : findRange(line);
+      const single = isBullet || range ? null : findSingleDate(line);
+      if (single && !single.rest) {
+        lastYear = single.date;
+        start('', { start: single.date, end: '', current: false });
+        return;
+      }
 
       if (range) {
         if (!range.rest && cur && !cur.hasDate && !cur.bullets.length) {
@@ -193,15 +215,27 @@
     return i > 0 ? [t.slice(0, i), t.slice(i + 2)] : [t, ''];
   }
 
+  const ROLE_LINE = /^(?:(?:works?|worked|working|served|serving)\s+as\s+(?:an?\s+)?|(?:position|role|designation|jawatan)\s*:\s*)(.+)$/i;
+  const isPlace = (l) => l.split(/\s+/).length <= 6 && /^[A-Z][\w .'-]*(,\s*[A-Z][\w .'-]*)+$/.test(l);
+
   function toExperience(entry) {
     let role = entry.title;
     let org = '';
     let location = '';
     const sub = entry.sub.slice();
-    // "Role | Company" or "Role at Company" on one line.
-    const inline = /^(.+?)\s+(?:\||@|at)\s+(.+)$/.exec(role);
-    if (inline && !sub.length) { role = inline[1]; [org, location] = splitOrgLocation(inline[2]); }
-    else if (sub.length) [org, location] = splitOrgLocation(sub.shift());
+    const roleIndex = sub.findIndex((l) => ROLE_LINE.test(l));
+    // "Company" then "Works as Engineer": the title line was the company.
+    if (roleIndex >= 0) {
+      role = ROLE_LINE.exec(sub.splice(roleIndex, 1)[0])[1].trim();
+      org = entry.title;
+      const placeIndex = sub.findIndex(isPlace);
+      if (placeIndex >= 0) location = sub.splice(placeIndex, 1)[0];
+    } else {
+      // "Role | Company" or "Role at Company" on one line.
+      const inline = /^(.+?)\s+(?:\||@|at)\s+(.+)$/.exec(role);
+      if (inline && !sub.length) { role = inline[1]; [org, location] = splitOrgLocation(inline[2]); }
+      else if (sub.length) [org, location] = splitOrgLocation(sub.shift());
+    }
     return {
       role, org, orgUrl: '', type: '', location,
       start: entry.start, end: entry.end, current: entry.current,
@@ -211,23 +245,36 @@
 
   const GRADE = /\b(c?gpa|cgpa|class|honou?rs|dean|distinction|merit|grade|band|first|second upper|pointer)\b/i;
 
+  const SCHOOL = /universit|college|kolej|institut|politeknik|polytechnic|school|sekolah|academy|akademi|matrikulasi|hochschule/i;
+
   function toEducation(entry) {
     const sub = entry.sub.slice();
     let school = '';
     let location = '';
     let grade = '';
     const details = [];
+    let schoolIndex = sub.findIndex((l) => SCHOOL.test(l) && !/^\(/.test(l));
+    if (schoolIndex < 0 && sub.length && !GRADE.test(sub[0]) && !isPlace(sub[0])) schoolIndex = 0;
     sub.forEach((line, i) => {
-      if (i === 0 && !GRADE.test(line)) [school, location] = splitOrgLocation(line);
-      else if (!grade && GRADE.test(line)) grade = line;
-      else details.push(line);
+      if (i === schoolIndex) {
+        const [name, place] = splitOrgLocation(line);
+        school = name;
+        if (place) location = place;
+      } else if (!grade && GRADE.test(line)) grade = line;
+      else if (!location && isPlace(line)) location = line;
+      else details.push(line.replace(/^\((.*)\)$/, '$1'));
+    });
+    const bullets = entry.bullets.filter((b) => {
+      if (!grade && GRADE.test(b)) { grade = b; return false; }
+      return true;
     });
     let { start, end } = entry;
     if (!entry.hasDate) {
       const single = findSingleDate(entry.title);
       if (single) { end = single.date; entry.title = single.rest; }
     }
-    return { qualification: entry.title, school, location, start, end: entry.current ? '' : end, grade, details: details.concat(entry.bullets) };
+    if (entry.hasDate && start && !end && !entry.current) { end = start; start = ''; } // a lone year is the finishing year
+    return { qualification: entry.title, school, location, start, end: entry.current ? '' : end, grade: grade.replace(/^(latest|current|final)\s+/i, ''), details: details.concat(bullets) };
   }
 
   function toProject(entry) {
@@ -251,6 +298,9 @@
     lines.forEach((raw) => {
       const line = raw.replace(BULLET, '').trim();
       if (!line) return;
+      // Table-style skills lose their layout when flattened; drop column labels and level words.
+      if (/^(software|programming|programming languages|languages?|tools|hardware|technical|soft skills|others?|spoken|written)$/i.test(line)) return;
+      if (/^(advanced?|intermediate|native|fluent|basic|beginner|proficient|good|excellent|moderate|expert)$/i.test(line)) return;
       const m = /^([^:]{2,40}):\s*(.+)$/.exec(line);
       const items = (m ? m[2] : line).split(/\s*[,;|•·]\s*/).map((s) => s.trim()).filter(Boolean);
       if (m) { last = { group: m[1].trim(), items: [] }; groups.push(last); }
@@ -279,10 +329,14 @@
     let current = 'header';
     lines.forEach((line) => {
       const trimmed = line.trim();
-      if (!trimmed) return;
+      if (!trimmed || /^[\s:;|•·\-–—_]*$/.test(trimmed)) return; // empty table cells and lone ":" separators
       const heading = headingOf(trimmed.replace(/:$/, ''));
-      if (heading) { current = heading; sections[current] = sections[current] || []; return; }
-      sections[current].push(trimmed);
+      // "Languages" inside a skills table is a column label, not a new section.
+      if (heading && !(current === 'skills' && /^languages?:?$/i.test(trimmed))) { current = heading; sections[current] = sections[current] || []; return; }
+      const list = sections[current];
+      // "Rawang," + "Selangor" split across table cells -> one line.
+      if (list.length && /,$/.test(list[list.length - 1]) && !BULLET.test(trimmed)) list[list.length - 1] += ' ' + trimmed;
+      else list.push(trimmed);
     });
 
     const result = { profile: parseHeader(sections.header) };

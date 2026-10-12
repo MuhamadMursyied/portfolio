@@ -49,7 +49,7 @@ test('a CV with dates first, pipes and a different layout still parses', () => {
     'Available on request',
   ].join('\n');
   const r = CV.parseCvText(text);
-  assert.strictEqual(r.profile.name, 'MUHAMAD MURSYIED');
+  assert.strictEqual(r.profile.name, 'Muhamad Mursyied');
   assert.strictEqual(r.profile.headline, 'Robotics Engineer');
   assert.strictEqual(r.profile.email, 'murs@example.com');
   assert.strictEqual(r.profile.location, 'Shah Alam, Selangor');
@@ -82,4 +82,25 @@ test('a CV Builder save file maps field by field', () => {
   assert.strictEqual(r.education[0].school, 'I');
   assert.deepStrictEqual(r.skills[0].items, [{ name: 'p' }, { name: 'q' }]);
   assert.deepStrictEqual(r.projects[0].links, [{ label: 'Source code', url: 'https://github.com/a/p' }]);
+});
+
+test('a table-style Word CV (labels, ":" cells, "Works as") parses', () => {
+  const text = [
+    'ali bin abu', 'Aspiring Engineer', 'Address', ':', 'Kajang,', 'Selangor', 'Mobile', ':', '+60 12-345 6789', 'Email', ':', 'ali@example.com', '',
+    'SUMMARY', 'Curious engineer.',
+    'EDUCATION BACKGROUND', '2020 - 2024', ':', 'Bachelor of Engineering', 'Shah Alam, Selangor', 'Universiti Example', '• Latest CGPA: 3.50',
+    'WORK EXPERIENCES', 'July 2024 -Current', ':', 'Example Sdn Bhd', 'Kuala Lumpur, Selangor', 'Works as Robotics Engineer', '• Built things.',
+    'June - Aug 2019', ':', 'Shop Sdn Bhd', 'Works as Operator', '• Packed products.',
+    'PROJECTS', '2023', ':', 'Line follower', '• Tuned PID.', 'Drone frame', '• Printed parts.',
+    'SKILLS', 'Programming', 'Languages', 'C++', 'English', ':', 'Advance', 'Python',
+  ].join('\n');
+  const r = CV.parseCvText(text);
+  assert.deepStrictEqual([r.profile.name, r.profile.headline, r.profile.location, r.profile.email], ['Ali Bin Abu', 'Aspiring Engineer', 'Kajang, Selangor', 'ali@example.com']);
+  const [job, old] = r.experience;
+  assert.deepStrictEqual([job.role, job.org, job.location, job.start, job.current], ['Robotics Engineer', 'Example Sdn Bhd', 'Kuala Lumpur, Selangor', '2024-07', true]);
+  assert.deepStrictEqual([old.role, old.org, old.start, old.end], ['Operator', 'Shop Sdn Bhd', '2019-06', '2019-08']);
+  const edu = r.education[0];
+  assert.deepStrictEqual([edu.school, edu.location, edu.start, edu.end, edu.grade], ['Universiti Example', 'Shah Alam, Selangor', '2020', '2024', 'CGPA: 3.50']);
+  assert.deepStrictEqual(r.projects.map((p) => [p.title, p.date]), [['Line follower', '2023'], ['Drone frame', '2023']]);
+  assert.deepStrictEqual(r.skills[0].items.map((i) => i.name), ['C++', 'English', 'Python']);
 });
