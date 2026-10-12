@@ -416,8 +416,113 @@
     ];
   }
 
+  // ---------- CV import ----------
+
+  const shorten = (text, n) => (text.length > n ? text.slice(0, n - 1).trim() + '…' : text);
+
+  function cvImportCard() {
+    const picker = h('input', { type: 'file', accept: '.pdf,.docx,.json,.txt,application/pdf', hidden: true });
+    const button = h('button', { type: 'button', class: 'ed-btn primary', onclick: () => picker.click() }, 'Upload my CV…');
+    picker.addEventListener('change', async () => {
+      const file = picker.files[0];
+      picker.value = '';
+      if (!file) return;
+      button.disabled = true;
+      button.textContent = 'Reading your CV…';
+      try {
+        const { kind, result } = await PF.cvImport.importCvFile(file);
+        showCvReview(file, kind, result);
+      } catch (e) {
+        toast('Could not read ' + file.name + ': ' + e.message, true);
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Upload my CV…';
+      }
+    });
+    return card('Fill in from your CV', 'Upload your CV as a PDF, Word (.docx) or CV Builder save file (.json). You will see what was found and choose what to use before anything changes.',
+      h('div', { class: 'ed-actions' }, button, picker));
+  }
+
+  // Lists what the CV import found, each with a tick box, and applies the ticked ones.
+  function showCvReview(file, kind, found) {
+    const rows = [];
+    const p = found.profile || {};
+    const cur = content.profile;
+    [['name', 'Name'], ['headline', 'Headline'], ['email', 'Email'], ['location', 'Location']].forEach(([key, label]) => {
+      if (p[key] && p[key] !== cur[key]) rows.push({ label, detail: p[key] + (cur[key] ? '  (replaces "' + cur[key] + '")' : ''), apply: () => { cur[key] = p[key]; } });
+    });
+    const sameUrl = (a, b) => a.replace(/\/+$/, '').toLowerCase() === b.replace(/\/+$/, '').toLowerCase();
+    const newLinks = (p.links || []).filter((l) => !cur.links.some((c) => sameUrl(c.url || '', l.url)));
+    if (newLinks.length) rows.push({ label: 'Links', detail: newLinks.map((l) => l.label + ': ' + l.url).join(', '), apply: () => { cur.links.push(...newLinks); } });
+    if (found.about && found.about !== content.about) {
+      rows.push({ label: 'About me', detail: shorten(found.about, 180) + (content.about ? '  (replaces your current text)' : ''), apply: () => { content.about = found.about; } });
+    }
+
+    const replaceRow = (key, label, describe) => {
+      const items = (found[key] || []).filter((x) => describe(x));
+      if (!items.length) return;
+      const existing = content[key].length;
+      rows.push({
+        label: label + ' (' + items.length + ')',
+        detail: items.map(describe).join(' · ') + (existing ? '  (replaces your current ' + existing + ')' : ''),
+        apply: () => { content[key] = items; },
+      });
+    };
+    replaceRow('experience', 'Experience', (e) => [e.role, e.org].filter(Boolean).join(' at '));
+    replaceRow('education', 'Education', (e) => [e.qualification, e.school].filter(Boolean).join(', '));
+    replaceRow('skills', 'Skills', (g) => g.group + ': ' + g.items.map((i) => i.name).join(', '));
+    replaceRow('certifications', 'Certifications', (c) => c.name);
+
+    const known = new Set(content.projects.map((pr) => (pr.title || '').toLowerCase()));
+    const newProjects = (found.projects || []).filter((pr) => pr.title && !known.has(pr.title.toLowerCase()));
+    if (newProjects.length) {
+      rows.push({ label: 'Projects (' + newProjects.length + ')', detail: newProjects.map((pr) => pr.title).join(' · ') + '  (added; add photos or videos later)', apply: () => { content.projects.push(...newProjects); } });
+    }
+    if (kind === 'pdf') {
+      rows.push({ label: 'Résumé button', detail: 'Let visitors download ' + file.name, apply: async () => { cur.resume = await addUpload(file); } });
+    }
+
+    if (!rows.length) {
+      toast(kind === 'pdf'
+        ? 'Nothing new found. If this PDF is a scan (a picture of text) it cannot be read; try the Word version instead.'
+        : 'Nothing new found in ' + file.name + '.', true);
+      return;
+    }
+
+    const applyButton = h('button', { type: 'button', class: 'ed-btn primary' }, 'Use ticked items');
+    const dialog = h('dialog', { class: 'ed-dialog', 'aria-labelledby': 'cv-review-title' },
+      h('h2', { id: 'cv-review-title' }, 'Found in ' + file.name),
+      h('p', { class: 'ed-intro' }, 'Untick anything you do not want. Everything stays editable afterwards, so check dates and titles in each tab.'),
+      h('ul', { class: 'ed-review' }, rows.map((row) => {
+        row.box = h('input', { type: 'checkbox' });
+        row.box.checked = true;
+        return h('li', {}, h('label', {}, row.box, h('span', {}, h('strong', {}, row.label), h('small', {}, row.detail))));
+      })),
+      h('div', { class: 'ed-actions end' },
+        h('button', { type: 'button', class: 'ed-btn', onclick: () => dialog.close() }, 'Cancel'),
+        applyButton));
+    applyButton.addEventListener('click', async () => {
+      applyButton.disabled = true;
+      try {
+        for (const row of rows) if (row.box.checked) await row.apply();
+        content = PF.normalize(content);
+        changed();
+        dialog.close();
+        showTab(currentTab);
+        toast('Updated from your CV. Have a look through each tab.');
+      } catch (e) {
+        applyButton.disabled = false;
+        toast(e.message, true);
+      }
+    });
+    dialog.addEventListener('close', () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
   function renderProfileTab() {
     return [
+      cvImportCard(),
       card('Profile', 'The top of your page.', fieldGrid(content.profile, [
         { key: 'name', label: 'Full name' },
         { key: 'headline', label: 'Headline', placeholder: 'Mechatronics Engineer · Robotics & UGV' },

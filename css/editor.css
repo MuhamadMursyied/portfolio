@@ -150,6 +150,18 @@ code { font: 500 0.85em ui-monospace, Menlo, Consolas, monospace; background: #e
 .ed-sections input { width: 18px; height: 18px; accent-color: var(--ed-accent); }
 .ed-sections label { flex: 1; font-weight: 500; }
 
+/* CV import review */
+.ed-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100% - 32px); padding: 22px; border: 1px solid var(--ed-border); border-radius: 14px; background: var(--ed-panel); color: var(--ed-text); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3); }
+.ed-dialog::backdrop { background: rgba(15, 18, 25, 0.55); }
+.ed-dialog h2 { margin: 0 0 4px; font-size: 1.1rem; word-break: break-word; }
+.ed-review { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ed-review label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--ed-border); border-radius: 8px; cursor: pointer; }
+.ed-review input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--ed-accent); }
+.ed-review span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ed-review strong { font-size: 0.88rem; }
+.ed-review small { color: var(--ed-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.ed-actions.end { justify-content: flex-end; margin-top: 16px; }
+
 /* publish */
 .ed-log { margin: 12px 0 0; padding-left: 1.2em; font-size: 0.85rem; color: var(--ed-muted); }
 .ed-log li.error { color: var(--ed-danger); font-weight: 500; }
@@ -187,3 +199,4 @@ code { font: 500 0.85em ui-monospace, Menlo, Consolas, monospace; background: #e
   .ed-top { padding: 8px 12px; }
   #ed-status { max-width: 52vw; }
 }
+.ed-dialog .ed-actions.end { position: sticky; bottom: -22px; margin: 16px -22px -22px; padding: 12px 22px; background: var(--ed-panel); border-top: 1px solid var(--ed-border); }

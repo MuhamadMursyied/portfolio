@@ -1,6 +1,6 @@
 # Portfolio
 
-My personal portfolio site, plus the in-browser editor I use to keep it up to date. Projects, work experience, skills and education live in one content file; the editor lets me change them, add images and videos, switch between ten themes and publish straight to GitHub Pages. No build step, no backend, no dependencies.
+My personal portfolio site, plus the in-browser editor I use to keep it up to date. Projects, work experience, skills and education live in one content file; the editor lets me change them, add images and videos, switch between ten themes and publish straight to GitHub Pages. No build step, no backend, and no dependencies apart from pdf.js, which is bundled and only loads when you import a PDF CV.
 
 **Live site:** https://muhamadmursyied.github.io/portfolio/  
 **Editor:** https://muhamadmursyied.github.io/portfolio/editor.html
@@ -18,6 +18,7 @@ My personal portfolio site, plus the in-browser editor I use to keep it up to da
 
 **The editor** (`editor.html`)
 - Form for every section with a **live preview** at desktop or phone width.
+- **Fill in from your CV**: upload a PDF, Word (.docx) or [CV Builder](https://github.com/MuhamadMursyied/cv-builder) save file and the editor reads your name, contact links, summary, experience, education, skills, projects and certifications. You tick what to use before anything changes, and a PDF can also become the site's "Résumé" download.
 - Upload photos and videos from your computer or phone. Large photos are resized in the browser (a 4 MB phone photo becomes roughly 300 KB) before they are stored.
 - Autosaves a draft in the browser, so a refresh never loses work.
 - **Publish to GitHub** in one click with a fine-grained token, or download `portfolio.js` and upload it on github.com yourself.
@@ -28,8 +29,9 @@ My personal portfolio site, plus the in-browser editor I use to keep it up to da
 ## Updating the portfolio
 
 1. Open the editor: https://muhamadmursyied.github.io/portfolio/editor.html (or `editor.html` locally).
-2. Edit your profile, add a project, upload screenshots or paste a YouTube link. The preview on the right updates as you type.
-3. Go to **Publish**:
+2. Optional: on the Profile tab, click **Upload my CV** to fill most fields at once.
+3. Edit your profile, add a project, upload screenshots or paste a YouTube link. The preview on the right updates as you type.
+4. Go to **Publish**:
    - **Publish to GitHub**: paste a token once (see below) and click Publish. The new files and the content are committed to the repo, and GitHub Pages updates the live site in a minute or two.
    - **Or upload yourself**: download `portfolio.js` (and any new media files), then on github.com upload `portfolio.js` into `data/` and the media files into `media/`.
 
@@ -108,6 +110,8 @@ js/icons.js           inline SVG icons
 js/editor.js          editor forms, draft, preview
 js/media-store.js     local file storage (IndexedDB) and photo resizing
 js/publish.js         download and GitHub API publishing
+js/cv-import.js       CV reader: PDF (via pdf.js), .docx (built-in unzip), CV Builder .json
+vendor/pdfjs/         pdf.js 3.11.174 (Apache-2.0), loaded only when a PDF CV is imported
 tests/                unit tests (node --test)
 ```
 
@@ -118,11 +122,12 @@ tests/                unit tests (node --test)
 - **Plain HTML, CSS and JavaScript.** A portfolio should load fast and keep working for years without dependency updates. The only external resource is Google Fonts, and the site falls back to system fonts without it.
 - **Content as a script file, not fetched JSON.** `fetch()` does not work from `file://`, a `<script>` tag does, so the site can be opened locally with no server.
 - **Safe rendering.** All content is inserted with `textContent`, and links pass through a check that blocks `javascript:` and similar URLs.
+- **CV import is a best guess, then a review.** It finds the usual section headings (Experience, Education, Skills, also common Malay month names) and date ranges, then shows everything it found with tick boxes. Scanned PDFs (pictures of text) cannot be read.
 - **One commit per file** when publishing, using the GitHub Contents API. Media is uploaded before the content file, so the live site never references a file that is not there yet.
 
 ## Credits
 
-General icons from [Feather](https://feathericons.com/) (MIT). Robot icons drawn for this project.
+General icons from [Feather](https://feathericons.com/) (MIT). Robot icons drawn for this project. PDF text extraction by [pdf.js](https://mozilla.github.io/pdf.js/) (Apache-2.0, see `vendor/pdfjs/LICENSE`).
 
 ## License
 
